@@ -808,10 +808,31 @@ export default function PomodoroApp() {
 
             {/* --- RIGHT SIDE: TASK FLOW --- */}
             <div className="w-full lg:w-[55%] neu-flat rounded-[2.5rem] p-6 sm:p-8 flex flex-col h-[600px] overflow-hidden">
-              <h3 className="font-bold text-zinc-100 mb-6 flex items-center text-lg">
+              <h3 className="font-bold text-zinc-100 mb-2 flex items-center text-lg">
                 <ListTodo className="w-5 h-5 mr-2 text-indigo-400" />
                 本日のタスクフロー
               </h3>
+              {(() => {
+                const total = tasks.length;
+                const done = tasks.filter(t => t.completed).length;
+                const ratio = total > 0 ? done / total : 0;
+                const msg = total === 0 ? '' :
+                  done === 0 ? '💪 さあ、最初の一歩を踏み出そう！' :
+                  ratio < 0.25 ? '🔥 いい調子！その勢いで進もう！' :
+                  ratio < 0.5 ? '⚡ 順調！もう少しで折り返しだ！' :
+                  ratio < 0.75 ? '🚀 半分以上クリア！ゴールが見えてきた！' :
+                  ratio < 1 ? '✨ あと少し！最後まで駆け抜けよう！' :
+                  '🎉 全タスク完了！素晴らしい一日だった！';
+                return msg ? (
+                  <div className="mb-4 p-3 rounded-xl neu-inset text-center">
+                    <p className="text-sm font-bold text-zinc-300">{msg}</p>
+                    <div className="mt-2 h-1.5 rounded-full bg-zinc-800 overflow-hidden">
+                      <div className="h-full rounded-full bg-gradient-to-r from-indigo-500 to-emerald-400 transition-all duration-700" style={{ width: `${ratio * 100}%` }} />
+                    </div>
+                    <p className="text-xs text-zinc-500 mt-1.5 font-medium">{done} / {total} タスク完了</p>
+                  </div>
+                ) : null;
+              })()}
               <div className="flex-1 overflow-y-auto custom-scrollbar pr-2 space-y-4">
                 {(() => {
                   const upcomingFlow = [];
@@ -893,15 +914,22 @@ export default function PomodoroApp() {
               </h2>
               
               <div>
-                <label className="block text-sm text-zinc-400 mb-2">何個に分解しますか？ (25分単位)</label>
-                <input
-                  type="number"
-                  min="2"
-                  max="10"
-                  value={decomposeParts}
-                  onChange={(e) => handlePartsChange(parseInt(e.target.value) || 2)}
-                  className="w-full p-3 neu-inset rounded-xl bg-transparent outline-none focus:ring-2 ring-indigo-500/50 text-white"
-                />
+                <label className="block text-sm text-zinc-400 mb-3">何個に分解しますか？ (25分単位)</label>
+                <div className="flex items-center justify-center space-x-6">
+                  <button
+                    type="button"
+                    onClick={() => handlePartsChange(decomposeParts - 1)}
+                    disabled={decomposeParts <= 2}
+                    className="w-14 h-14 text-2xl font-bold rounded-2xl neu-flat hover:neu-pressed text-zinc-300 disabled:opacity-30 disabled:cursor-not-allowed transition-all flex items-center justify-center"
+                  >−</button>
+                  <span className="text-4xl font-black text-indigo-400 w-16 text-center tabular-nums">{decomposeParts}</span>
+                  <button
+                    type="button"
+                    onClick={() => handlePartsChange(decomposeParts + 1)}
+                    disabled={decomposeParts >= 10}
+                    className="w-14 h-14 text-2xl font-bold rounded-2xl neu-flat hover:neu-pressed text-zinc-300 disabled:opacity-30 disabled:cursor-not-allowed transition-all flex items-center justify-center"
+                  >+</button>
+                </div>
               </div>
 
               <div className="space-y-3 max-h-[40vh] overflow-y-auto pr-2 custom-scrollbar">
