@@ -1,0 +1,81 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-[#15171c] text-zinc-100;
+  }
+}
+
+@layer utilities {
+  /* Soft Neumorphism on dark background (#15171c) */
+  .neu-flat {
+    background: #15171c;
+    box-shadow: 8px 8px 16px #0b0c0f, -8px -8px 16px #1f2229;
+  }
+  .neu-inset {
+    background: #15171c;
+    box-shadow: inset 5px 5px 10px #0b0c0f, inset -5px -5px 10px #1f2229;
+  }
+  .neu-pressed {
+    background: #15171c;
+    box-shadow: inset 8px 8px 16px #0b0c0f, inset -8px -8px 16px #1f2229;
+  }
+  
+  /* Priority Buttons (Calm distinct colors - slightly lightened) */
+  .neu-urgent-pressed {
+    background: #5a222f; /* Lighter dark red */
+    box-shadow: inset 5px 5px 10px #220b10, inset -5px -5px 10px #682937;
+    color: #fca5a5;
+  }
+  .neu-mid-pressed {
+    background: #5e4115; /* Lighter dark yellow/orange */
+    box-shadow: inset 5px 5px 10px #241604, inset -5px -5px 10px #70501d;
+    color: #fcd34d;
+  }
+  .neu-low-pressed {
+    background: #165246; /* Lighter dark green/teal */
+    box-shadow: inset 5px 5px 10px #061c17, inset -5px -5px 10px #1c6255;
+    color: #6ee7b7;
+  }
+
+  /* Optimize animations - purely static GPU rendered shapes */
+  .organic-curve {
+    border-radius: 50%;
+    transform: translateZ(0); /* Hardware acceleration */
+  }
+
+  /* Glows */
+  .neon-glow-blue {
+    box-shadow: 0 0 20px rgba(59, 130, 246, 0.6), 0 0 40px rgba(139, 92, 246, 0.4);
+  }
+}
+
+@keyframes pulseGlow {
+  0%, 100% { filter: drop-shadow(0 0 10px rgba(139, 92, 246, 0.5)); transform: scale(1); }
+  50% { filter: drop-shadow(0 0 25px rgba(59, 130, 246, 0.8)); transform: scale(1.05); }
+}
+
+@keyframes pulseButtonGlow {
+  0%, 100% { box-shadow: 0 0 15px rgba(59, 130, 246, 0.5), 8px 8px 16px #0b0c0f, -8px -8px 16px #1f2229; transform: scale(1); }
+  50% { box-shadow: 0 0 30px rgba(139, 92, 246, 0.8), 8px 8px 16px #0b0c0f, -8px -8px 16px #1f2229; transform: scale(1.02); }
+}
+
+.animate-pulse-glow {
+  animation: pulseGlow 3s infinite ease-in-out;
+}
+
+.animate-button-glow {
+  animation: pulseButtonGlow 3s infinite ease-in-out;
+}
+
+.organic-curve {
+  border-radius: 40% 60% 70% 30% / 40% 50% 60% 50%;
+  animation: morph 8s ease-in-out infinite alternate;
+}
+
+@keyframes morph {
+  0% { border-radius: 40% 60% 70% 30% / 40% 50% 60% 50%; }
+  100% { border-radius: 60% 40% 30% 70% / 60% 30% 70% 40%; }
+}
