@@ -1,4 +1,5 @@
-name: Deploy to GitHub Pages
+# Automatic deployment to GitHub Pages
+name: Build and Deploy to GitHub Pages
 
 on:
   push:
