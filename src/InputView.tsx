@@ -20,12 +20,15 @@ interface InputViewProps {
   workLog: Record<string, number[]>;
   onOpenHistory: (date: string) => void;
   onOpenDecompose: (task: Task) => void;
+  dismissedSuggestions: string[];
+  onDismissSuggestion: (id: string) => void;
   quote: string;
 }
 
 export const InputView: React.FC<InputViewProps> = React.memo(({ 
   tasks, setTasks, breakSettings, setBreakSettings, 
-  onStartReview, onOpenHelp, activeDays, onOpenHistory, onOpenDecompose, quote 
+  onStartReview, onOpenHelp, activeDays, onOpenHistory, onOpenDecompose, 
+  dismissedSuggestions, onDismissSuggestion, quote 
 }) => {
   const [newTask, setNewTask] = useState('');
   const [priority, setPriority] = useState<Priority>('中');
@@ -43,15 +46,17 @@ export const InputView: React.FC<InputViewProps> = React.memo(({
     e.preventDefault();
     if (!newTask.trim()) return;
     
-    setTasks(prev => [...prev, {
+    const task: Task = {
       id: Date.now().toString(),
       text: newTask.trim(),
       completed: false,
       priority,
       timeSlot,
       deadline: deadline || undefined,
-      addedDate: today
-    }]);
+      addedDate: today,
+      scheduledDate: (!deadline || deadline <= today) ? today : undefined
+    };
+    setTasks(prev => [...prev, task]);
     
     setNewTask('');
     setDeadline('');
@@ -64,35 +69,30 @@ export const InputView: React.FC<InputViewProps> = React.memo(({
   };
 
   // ─── Filtering ───
-  // Today's tasks: Added today OR incomplete with no deadline OR past deadline
   // Today's tasks: strictly non-completed tasks for today, or past/current deadline
-  const todayTasks = useMemo(() => tasks.filter(t => {
-    if (t.completed) return false;
-    // Hide tasks with a FUTURE deadline, even if added today
-    if (t.deadline && t.deadline > today) return false;
-    // Show if added today OR if it has no deadline (backlogs always have deadlines in this flow)
-    return t.addedDate === today || !t.deadline || t.deadline <= today;
-  }), [tasks, today]);
-
-  const backlogTasks = useMemo(() => tasks.filter(t => 
-    !t.completed && t.deadline && t.deadline > today
+  const todayTasks = useMemo(() => tasks.filter(t => 
+    !t.completed && t.scheduledDate === today
   ), [tasks, today]);
 
-  // Suggested task: Near deadline (3 days)
-  const suggestion = useMemo(() => {
-    const in3Days = new Date();
-    in3Days.setDate(in3Days.getDate() + 3);
-    const limit = in3Days.toISOString().split('T')[0];
-    
-    return backlogTasks.find(t => t.deadline && t.deadline <= limit);
-  }, [backlogTasks]);
+  const backlogTasks = useMemo(() => tasks.filter(t => 
+    !t.completed && t.scheduledDate !== today
+  ), [tasks, today]);
+
+  const suggestedTask = useMemo(() => {
+    const nearDeadline = tasks.find(t => 
+      !t.completed && 
+      t.deadline && 
+      t.deadline > today && 
+      t.addedDate !== today &&
+      !dismissedSuggestions.includes(t.id) &&
+      (new Date(t.deadline).getTime() - new Date(today).getTime()) <= 3 * 24 * 60 * 60 * 1000
+    );
+    return nearDeadline;
+  }, [tasks, today, dismissedSuggestions]);
 
   const approveSuggestion = (task: Task) => {
-    // To ensure it's at the end, we mark it as added today and put it at the end of the tasks array
-    setTasks(prev => {
-      const filtered = prev.filter(t => t.id !== task.id);
-      return [...filtered, { ...task, addedDate: today }];
-    });
+    setTasks(prev => prev.map(t => t.id === task.id ? { ...t, scheduledDate: today } : t));
+    onDismissSuggestion(task.id);
   };
 
   return (
@@ -242,10 +242,13 @@ export const InputView: React.FC<InputViewProps> = React.memo(({
 
         {/* Task List (Today or Backlog) */}
         <div className="space-y-3 min-h-[300px]">
-          <h4 className="text-[10px] font-black text-zinc-600 tracking-[0.2em] mb-4 flex items-center">
-            <div className="w-8 h-[1px] bg-zinc-800 mr-2" />
-            {showBacklog ? 'BACKLOGタスク' : 'TODAYのタスク一覧'} ({showBacklog ? backlogTasks.length : todayTasks.length})
-          </h4>
+          <div className="flex items-center justify-between mb-4">
+            <h4 className="text-[10px] font-black text-zinc-600 tracking-[0.2em] flex items-center">
+              <div className="w-8 h-[1px] bg-zinc-800 mr-2" />
+              {showBacklog ? 'BACKLOGタスク' : 'TODAYのタスク一覧'} ({showBacklog ? backlogTasks.length : todayTasks.length})
+            </h4>
+            <span className="text-[10px] text-zinc-600 font-bold italic">※ 星マークボタンでタスクを25分単位に分解できます</span>
+          </div>
           
           <AnimatePresence mode="popLayout">
             {(showBacklog ? backlogTasks : todayTasks).map(t => (
@@ -290,7 +293,7 @@ export const InputView: React.FC<InputViewProps> = React.memo(({
             ))}
           </AnimatePresence>
 
-          {suggestion && !showBacklog && (
+          {suggestedTask && !showBacklog && (
             <motion.div 
               initial={{ y: 10, opacity: 0 }}
               animate={{ y: 0, opacity: 1 }}
@@ -304,14 +307,22 @@ export const InputView: React.FC<InputViewProps> = React.memo(({
                 </span>
               </div>
               <p className="text-sm font-bold text-white mb-3 leading-relaxed">
-                「{suggestion.text}」を今日のリストに追加しますか？
+                「{suggestedTask.text}」を今日のリストに追加しますか？
               </p>
-              <button 
-                onClick={() => approveSuggestion(suggestion)}
-                className="w-full py-2 bg-indigo-500 hover:bg-indigo-600 text-white text-xs font-bold rounded-xl shadow-lg transition-all active:scale-95"
-              >
-                今日のタスクに追加
-              </button>
+                  <div className="flex items-center space-x-2 mt-4">
+                    <button 
+                      onClick={() => onDismissSuggestion(suggestedTask.id)}
+                      className="flex-1 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest text-zinc-500 hover:text-white transition-colors"
+                    >
+                      あとで（無視）
+                    </button>
+                    <button 
+                      onClick={() => approveSuggestion(suggestedTask)}
+                      className="flex-[1.5] py-2 bg-indigo-500/20 hover:bg-indigo-500/30 text-indigo-400 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all"
+                    >
+                      今日のリストに追加
+                    </button>
+                  </div>
             </motion.div>
           )}
 

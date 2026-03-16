@@ -21,6 +21,7 @@ export type Task = {
   timeSlot: TimeSlot;
   deadline?: string; // YYYY-MM-DD, optional
   addedDate?: string;
+  scheduledDate?: string; // YYYY-MM-DD, the day this task is planned for
 };
 
 // ─── Work Log & History ───

@@ -34,7 +34,11 @@ export default function PomodoroApp() {
         localStorage.setItem(LS_KEYS.history, JSON.stringify(updatedHistory));
       }
       // Carry over incomplete tasks
-      const carryOver = savedTasks.filter(t => !t.completed).map(t => ({ ...t, addedDate: today }));
+      const carryOver = savedTasks.filter(t => !t.completed).map(t => ({ 
+        ...t, 
+        addedDate: today, 
+        scheduledDate: t.scheduledDate ? today : undefined // If it was scheduled for yesterday, schedule it for today
+      }));
       localStorage.setItem(LS_KEYS.lastDate, today);
       localStorage.setItem(LS_KEYS.tasks, JSON.stringify(carryOver));
       return carryOver;
@@ -66,6 +70,7 @@ export default function PomodoroApp() {
   const [mode, setMode] = useState<ModeId>('work');
   const [sequenceIndex, setSequenceIndex] = useState(0);
   const [isContinuing, setIsContinuing] = useState(false);
+  const [dismissedSuggestions, setDismissedSuggestions] = useState<string[]>([]);
 
   // ─── UI / Modal State ───
   const [quote, setQuote] = useState("");
@@ -125,40 +130,28 @@ export default function PomodoroApp() {
 
   // ─── Handlers ───
   const handleStartReview = useCallback(() => {
-    // Sort logic for today's tasks
     const today = new Date().toISOString().split('T')[0];
     
-    // Non-today tasks (backlog that might have been forced in - though filter above handles it)
-    // Actually, let's just sort the 'tasks' that are not completed.
-    const activeTasks = tasks.filter(t => !t.completed);
+    // We strictly take:
+    // 1. Tasks scheduled for today
+    const activeTasks = tasks.filter(t => !t.completed && t.scheduledDate === today);
 
     const priorityWeight = { '高': 3, '中': 2, '低': 1 };
     const sorted = [...activeTasks].sort((a, b) => {
-        // 1. Deadline sorting: Future deadlines go to bottom
-        const aIsFuture = a.deadline && a.deadline > today;
-        const bIsFuture = b.deadline && b.deadline > today;
-
-        if (aIsFuture && !bIsFuture) return 1;
-        if (!aIsFuture && bIsFuture) return -1;
-        
-        if (aIsFuture && bIsFuture) {
-           // Both are future: sort by date (nearest first)
-           return (a.deadline || "").localeCompare(b.deadline || "");
-        }
-
-        // 2. Time slot sorting (for today's tasks)
+        // 1. Time slot sorting
         if (a.timeSlot !== b.timeSlot) {
             const slots: TimeSlot[] = ['朝', '昼', '夜'];
             return slots.indexOf(a.timeSlot) - slots.indexOf(b.timeSlot);
         }
 
-        // 3. Priority sorting
+        // 2. Priority sorting
         return priorityWeight[b.priority] - priorityWeight[a.priority];
     });
 
     setTasks(prev => {
         const completed = prev.filter(t => t.completed);
-        return [...completed, ...sorted];
+        const backlog = prev.filter(t => !t.completed && !activeTasks.some(tr => tr.id === t.id));
+        return [...completed, ...backlog, ...sorted];
     });
 
     setAppState('review');
@@ -221,17 +214,17 @@ export default function PomodoroApp() {
   // View logic
   const today = new Date().toISOString().split('T')[0];
   const todayTasksForReview = useMemo(() => 
-    tasks.filter(t => !t.completed && (t.addedDate === today || !t.deadline || t.deadline <= today)),
+    tasks.filter(t => !t.completed && t.scheduledDate === today),
   [tasks, today]);
 
   return (
     <div className="min-h-screen bg-[#15171c] text-zinc-100 font-sans selection:bg-indigo-500/30 overflow-x-hidden transition-colors duration-1000">
       
-      {/* Background Glows Enhancement */}
+      {/* Background Glows Enhancement - Optimized blur */}
       <div className="fixed inset-0 z-0 overflow-hidden pointer-events-none">
-        <div className={`organic-curve absolute -top-[20%] -left-[10%] w-[70vw] h-[70vw] transition-colors duration-[2000ms] blur-[120px] opacity-50 ${appState === 'running' && mode !== 'work' ? 'bg-emerald-500/30' : 'bg-indigo-600/30'}`} />
-        <div className="organic-curve absolute top-[10%] -right-[20%] w-[80vw] h-[80vw] bg-violet-600/20 blur-[150px] opacity-40" style={{ animationDelay: '-4s', animationDuration: '25s' }} />
-        <div className="organic-curve absolute -bottom-[30%] left-[10%] w-[60vw] h-[60vw] bg-blue-600/10 blur-[100px] opacity-30" style={{ animationDelay: '-8s', animationDuration: '30s' }} />
+        <div className={`organic-curve absolute -top-[20%] -left-[10%] w-[70vw] h-[70vw] transition-colors duration-[2000ms] blur-[80px] opacity-40 ${appState === 'running' && mode !== 'work' ? 'bg-emerald-500/30' : 'bg-indigo-600/30'}`} />
+        <div className="organic-curve absolute top-[10%] -right-[20%] w-[80vw] h-[80vw] bg-violet-600/20 blur-[100px] opacity-30" style={{ animationDelay: '-4s', animationDuration: '25s' }} />
+        <div className="organic-curve absolute -bottom-[30%] left-[10%] w-[60vw] h-[60vw] bg-blue-600/10 blur-[70px] opacity-20" style={{ animationDelay: '-8s', animationDuration: '30s' }} />
       </div>
 
       <AnimatePresence mode="wait">
@@ -248,6 +241,8 @@ export default function PomodoroApp() {
             workLog={workLog}
             onOpenHistory={setHistoryDate}
             onOpenDecompose={setDecomposeTarget}
+            dismissedSuggestions={dismissedSuggestions}
+            onDismissSuggestion={(id) => setDismissedSuggestions(prev => [...prev, id])}
             quote={quote}
           />
         )}

@@ -50,31 +50,29 @@ export const TimerView: React.FC<TimerViewProps> = React.memo(({
     let tempSeqIdx = sequenceIndex;
     let taskIdx = 0;
     
+    // If all tasks are completed, don't show any upcoming flow
+    if (activeTasks.length === 0) return [];
+
     for (let i = 0; i < 8; i++) {
         const m = POMODORO_SEQUENCE[tempSeqIdx % POMODORO_SEQUENCE.length];
         if (m === 'work') {
             const task = activeTasks[taskIdx];
             if (task) {
-                // If the user marked to continue, the next work slot is also this task
-                if (isContinuing && i > 0 && flow.some(f => f.type === 'work' && f.task?.id === task.id)) {
-                   // This logic is slightly complex for a simple loop, 
-                   // but basically we want to show the current task repeated if continuing.
-                }
                 flow.push({ type: 'work' as const, task, mode: MODES[m] });
-                // Only increment task pointer if we are NOT continuing the current task in the next slot
                 if (!(isContinuing && taskIdx === 0)) {
                   taskIdx++;
                 }
-            } else {
-                flow.push({ type: 'work' as const, task: null, mode: MODES[m] });
             }
         } else {
-            flow.push({ type: 'break' as const, mode: MODES[m] });
+            // Only add break if there are still tasks left
+            if (taskIdx < activeTasks.length) {
+              flow.push({ type: 'break' as const, mode: MODES[m] });
+            }
         }
         tempSeqIdx++;
     }
     return flow;
-  }, [sequenceIndex, activeTasks, MODES, isContinuing]);
+  }, [sequenceIndex, activeTasks, MODES, isContinuing, mode]);
 
   return (
     <motion.div 
@@ -205,9 +203,17 @@ export const TimerView: React.FC<TimerViewProps> = React.memo(({
           </div>
         )}
 
-        {/* The Big Timer Circle */}
-        <div className="relative aspect-square w-full max-w-[400px] mx-auto group">
-          <svg className="w-full h-full transform -rotate-90 filter drop-shadow-[0_0_30px_rgba(0,0,0,0.5)]">
+        {/* Progress Circle (Simplified SVG) */}
+        <div className="relative w-[340px] h-[340px] md:w-[420px] md:h-[420px] flex items-center justify-center group">
+          <svg className="w-full h-full transform -rotate-90 drop-shadow-lg">
+             <defs>
+               <filter id="glow">
+                 <feGaussianBlur stdDeviation="3" result="coloredBlur"/>
+                 <feMerge>
+                   <feMergeNode in="coloredBlur"/><feMergeNode in="SourceGraphic"/>
+                 </feMerge>
+               </filter>
+             </defs>
             <circle
               cx="200" cy="200" r={radius}
               stroke="currentColor" strokeWidth="8" fill="transparent"
@@ -220,19 +226,15 @@ export const TimerView: React.FC<TimerViewProps> = React.memo(({
               animate={{ strokeDashoffset }}
               transition={{ duration: 0.5, ease: "linear" }}
               strokeLinecap="round"
-              className={`${currentMode.color} drop-shadow-[0_0_20px_currentColor]`}
+              className={`${currentMode.color} drop-shadow-[0_0_10px_currentColor]`}
+              style={{ filter: 'url(#glow)' }}
             />
           </svg>
           
           <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
-            <motion.span 
-              key={timeLeft}
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="text-8xl font-black tracking-tighter text-white tabular-nums drop-shadow-2xl"
-            >
+            <span className="text-8xl font-black tracking-tighter text-white tabular-nums drop-shadow-2xl">
               {formatTime(timeLeft)}
-            </motion.span>
+            </span>
             <span className={`text-sm font-black tracking-[0.3em] uppercase mt-2 ${currentMode.color}`}>
               {currentMode.label}
             </span>
@@ -260,17 +262,19 @@ export const TimerView: React.FC<TimerViewProps> = React.memo(({
         <div className="neu-flat rounded-[2.5rem] p-8 min-h-[500px] flex flex-col relative overflow-hidden h-full">
            <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-500/5 rounded-full blur-3xl -mr-32 -mt-32" />
            
-           <div className="flex items-center justify-between mb-8 relative z-10">
-             <div className="flex items-center space-x-3">
-                <div className="p-2.5 neu-inset rounded-xl text-indigo-400">
-                  <Sparkles className="w-5 h-5" />
-                </div>
-                <h3 className="text-xl font-black text-white italic tracking-tight">Today's Flow</h3>
+           {upcomingFlow.length > 0 && (
+             <div className="flex items-center justify-between mb-8 relative z-10">
+               <div className="flex items-center space-x-3">
+                  <div className="p-2.5 neu-inset rounded-xl text-indigo-400">
+                    <Sparkles className="w-5 h-5" />
+                  </div>
+                  <h3 className="text-xl font-black text-white italic tracking-tight">Today's Flow</h3>
+               </div>
+               <div className="text-[10px] font-black text-zinc-500 tracking-widest uppercase bg-zinc-800/50 px-3 py-1.5 rounded-full">
+                 Next 8 Steps
+               </div>
              </div>
-             <div className="text-[10px] font-black text-zinc-500 tracking-widest uppercase bg-zinc-800/50 px-3 py-1.5 rounded-full">
-               Next 8 Steps
-             </div>
-           </div>
+           )}
 
            <div className="space-y-4 relative z-10 flex-1">
              <AnimatePresence mode="popLayout">
