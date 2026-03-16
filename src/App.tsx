@@ -34,11 +34,14 @@ export default function PomodoroApp() {
         localStorage.setItem(LS_KEYS.history, JSON.stringify(updatedHistory));
       }
       // Carry over incomplete tasks
-      const carryOver = savedTasks.filter(t => !t.completed).map(t => ({ 
-        ...t, 
-        addedDate: today, 
-        scheduledDate: t.scheduledDate ? today : undefined // If it was scheduled for yesterday, schedule it for today
-      }));
+      const carryOver = savedTasks.filter(t => !t.completed).map(t => {
+        const isPastOrTodayDeadline = t.deadline && t.deadline <= today;
+        return { 
+          ...t, 
+          addedDate: today, 
+          scheduledDate: (t.scheduledDate && t.scheduledDate > today) ? t.scheduledDate : (isPastOrTodayDeadline ? today : undefined)
+        };
+      });
       localStorage.setItem(LS_KEYS.lastDate, today);
       localStorage.setItem(LS_KEYS.tasks, JSON.stringify(carryOver));
       return carryOver;

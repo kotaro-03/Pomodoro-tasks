@@ -69,21 +69,23 @@ export const InputView: React.FC<InputViewProps> = React.memo(({
   };
 
   // ─── Filtering ───
-  // Today's tasks: strictly non-completed tasks for today, or past/current deadline
+  // Today's tasks: strictly non-completed tasks for today
   const todayTasks = useMemo(() => tasks.filter(t => 
     !t.completed && t.scheduledDate === today
   ), [tasks, today]);
 
+  // Backlog: non-completed tasks NOT scheduled for today
   const backlogTasks = useMemo(() => tasks.filter(t => 
     !t.completed && t.scheduledDate !== today
   ), [tasks, today]);
 
   const suggestedTask = useMemo(() => {
+    // Suggest tasks from backlog that are near deadline (within 3 days)
     const nearDeadline = tasks.find(t => 
       !t.completed && 
       t.deadline && 
       t.deadline > today && 
-      t.addedDate !== today &&
+      t.scheduledDate !== today && // Must be in backlog
       !dismissedSuggestions.includes(t.id) &&
       (new Date(t.deadline).getTime() - new Date(today).getTime()) <= 3 * 24 * 60 * 60 * 1000
     );
@@ -228,13 +230,14 @@ export const InputView: React.FC<InputViewProps> = React.memo(({
             </div>
 
             {/* Deadline */}
-            <div className="relative">
+            <div className="relative group">
+              <CalendarDays className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-amber-400 pointer-events-none group-focus-within:text-amber-300 transition-colors" />
               <input
                 type="date"
                 value={deadline}
                 min={today}
                 onChange={(e) => setDeadline(e.target.value)}
-                className="w-full neu-inset bg-transparent rounded-2xl px-4 py-2.5 text-xs font-bold text-zinc-300 focus:outline-none"
+                className="w-full neu-inset bg-transparent rounded-2xl pl-11 pr-4 py-2.5 text-xs font-bold text-amber-400 focus:text-amber-200 focus:outline-none transition-all placeholder:text-amber-900/50"
               />
             </div>
           </div>
