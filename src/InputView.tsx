@@ -231,13 +231,12 @@ export const InputView: React.FC<InputViewProps> = React.memo(({
 
             {/* Deadline */}
             <div className="relative group">
-              <CalendarDays className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-amber-400 pointer-events-none group-focus-within:text-amber-300 transition-colors" />
               <input
                 type="date"
                 value={deadline}
                 min={today}
                 onChange={(e) => setDeadline(e.target.value)}
-                className="w-full neu-inset bg-transparent rounded-2xl pl-11 pr-4 py-2.5 text-xs font-bold text-amber-400 focus:text-amber-200 focus:outline-none transition-all placeholder:text-amber-900/50"
+                className="w-full neu-inset bg-transparent rounded-2xl px-4 py-2.5 text-xs font-bold text-amber-400 focus:text-amber-200 focus:outline-none transition-all placeholder:text-amber-900/50"
               />
             </div>
           </div>
