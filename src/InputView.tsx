@@ -2,7 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Plus, Brain, Clock, CalendarDays, 
-  Trash2, ChevronRight, HelpCircle, Archive, ListTodo, Coffee
+  Trash2, ChevronRight, HelpCircle, Archive, ListTodo, Coffee, Sparkles
 } from 'lucide-react';
 import { 
   Task, Priority, TimeSlot, BreakSettings, BREAK_OPTIONS, 
@@ -19,12 +19,13 @@ interface InputViewProps {
   activeDays: string[];
   workLog: Record<string, number[]>;
   onOpenHistory: (date: string) => void;
+  onOpenDecompose: (task: Task) => void;
   quote: string;
 }
 
 export const InputView: React.FC<InputViewProps> = React.memo(({ 
   tasks, setTasks, breakSettings, setBreakSettings, 
-  onStartReview, onOpenHelp, activeDays, onOpenHistory, quote 
+  onStartReview, onOpenHelp, activeDays, onOpenHistory, onOpenDecompose, quote 
 }) => {
   const [newTask, setNewTask] = useState('');
   const [priority, setPriority] = useState<Priority>('中');
@@ -74,7 +75,7 @@ export const InputView: React.FC<InputViewProps> = React.memo(({
   }), [tasks, today]);
 
   const backlogTasks = useMemo(() => tasks.filter(t => 
-    !t.completed && t.addedDate !== today && t.deadline && t.deadline > today
+    !t.completed && t.deadline && t.deadline > today
   ), [tasks, today]);
 
   // Suggested task: Near deadline (3 days)
@@ -139,11 +140,15 @@ export const InputView: React.FC<InputViewProps> = React.memo(({
                 <div 
                   key={i} 
                   onClick={() => onOpenHistory(dStr)}
-                  className={`aspect-square rounded-full flex items-center justify-center cursor-pointer transition-all ${
-                    isActive ? 'bg-indigo-500 shadow-[0_0_8px_rgba(99,102,241,0.6)]' : 'bg-zinc-800/30'
+                  className={`aspect-square rounded-lg flex items-center justify-center cursor-pointer transition-all border ${
+                    isActive 
+                      ? 'bg-indigo-500 border-indigo-400 shadow-[0_0_8px_rgba(99,102,241,0.4)]' 
+                      : 'bg-zinc-800/20 border-white/5 hover:bg-zinc-800/40 text-zinc-600'
                   } hover:scale-110`}
                 >
-                  {isActive && <div className="w-1 h-1 bg-white rounded-full" />}
+                  <span className={`text-[9px] font-black ${isActive ? 'text-white' : ''}`}>
+                    {d.getDate()}
+                  </span>
                 </div>
               );
             })}
@@ -266,12 +271,21 @@ export const InputView: React.FC<InputViewProps> = React.memo(({
                     )}
                   </div>
                 </div>
-                <button 
-                  onClick={() => deleteTask(t.id)}
-                  className="p-2 text-zinc-700 hover:text-rose-500 transition-colors opacity-0 group-hover:opacity-100"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
+                <div className="flex items-center space-x-1 opacity-0 group-hover:opacity-100 transition-all">
+                  <button 
+                    onClick={() => onOpenDecompose(t)}
+                    className="p-2 text-zinc-600 hover:text-indigo-400 transition-colors"
+                    title="タスクを分割する"
+                  >
+                    <Sparkles className="w-4 h-4" />
+                  </button>
+                  <button 
+                    onClick={() => deleteTask(t.id)}
+                    className="p-2 text-zinc-600 hover:text-rose-500 transition-colors"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
               </motion.div>
             ))}
           </AnimatePresence>

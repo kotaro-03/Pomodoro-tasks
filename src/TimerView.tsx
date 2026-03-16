@@ -109,44 +109,91 @@ export const TimerView: React.FC<TimerViewProps> = React.memo(({
         </div>
 
         {/* Current Task Status Card */}
-        <div className="neu-flat rounded-[2rem] p-6 flex items-center space-x-5">
-           <div className={`p-3 neu-inset rounded-xl ${currentMode.color}`}>
-             <CurrentIcon className={`w-6 h-6 ${isActive ? 'animate-pulse-glow' : ''}`} />
-           </div>
-           <div className="flex-1 min-w-0">
-             <p className="flex items-center space-x-2 mb-1">
-               <span className="text-[10px] text-zinc-500 font-black tracking-widest uppercase">
-                 {mode === 'work' ? 'Current Task' : 'Break Time'}
-               </span>
-               {isContinuing && mode === 'work' && (
-                 <span className="text-[10px] font-black text-teal-400 bg-teal-400/10 px-2 py-0.5 rounded-full border border-teal-400/20">
-                   CONTINUING
+        {currentTask ? (
+          <div className="neu-flat rounded-[2rem] p-6 flex items-center space-x-5">
+             <div className={`p-3 neu-inset rounded-xl ${currentMode.color}`}>
+               <CurrentIcon className={`w-6 h-6 ${isActive ? 'animate-pulse-glow' : ''}`} />
+             </div>
+             <div className="flex-1 min-w-0">
+               <p className="flex items-center space-x-2 mb-1">
+                 <span className="text-[10px] text-zinc-500 font-black tracking-widest uppercase">
+                   {mode === 'work' ? 'Current Task' : 'Break Time'}
                  </span>
-               )}
-             </p>
-             <p className="text-zinc-100 font-bold truncate text-lg">
-               {mode === 'work' ? (currentTask ? currentTask.text : 'No active task') : currentMode.label}
-             </p>
-           </div>
-           {mode === 'work' && currentTask && (
-             <div className="flex items-center space-x-2">
+                 {isContinuing && mode === 'work' && (
+                   <span className="text-[10px] font-black text-teal-400 bg-teal-400/10 px-2 py-0.5 rounded-full border border-teal-400/20">
+                     CONTINUING
+                   </span>
+                 )}
+               </p>
+               <p className="text-zinc-100 font-bold truncate text-lg">
+                 {mode === 'work' ? currentTask.text : currentMode.label}
+               </p>
+             </div>
+             {mode === 'work' && (
+               <div className="flex items-center space-x-2">
+                 <button
+                   onClick={onSetContinue}
+                   className={`p-2.5 rounded-xl transition-all ${isContinuing ? 'neu-pressed text-teal-400' : 'neu-flat text-zinc-500 hover:text-teal-400'}`}
+                   title="次のフェーズでもこのタスクを続ける"
+                 >
+                   <FastForward className="w-5 h-5" />
+                 </button>
+                 <button
+                   onClick={() => onComplete(currentTask.id)}
+                   className="p-3 neu-flat hover:neu-pressed text-zinc-400 hover:text-indigo-400 rounded-xl transition-all"
+                   title="完了ボタン"
+                 >
+                   <Check className="w-6 h-6" />
+                 </button>
+               </div>
+             )}
+             {mode !== 'work' && (
                <button
-                 onClick={onSetContinue}
-                 className={`p-2.5 rounded-xl transition-all ${isContinuing ? 'neu-pressed text-teal-400' : 'neu-flat text-zinc-500 hover:text-teal-400'}`}
-                 title="次のフェーズでもこのタスクを続ける"
+                 onClick={onSkipBreak}
+                 className="p-3 neu-flat hover:neu-pressed text-zinc-400 hover:text-emerald-400 rounded-xl transition-all flex items-center space-x-2"
+                 title="休憩を終了して次へ"
                >
                  <FastForward className="w-5 h-5" />
+                 <span className="text-[10px] font-black uppercase">Skip</span>
                </button>
-               <button
-                 onClick={() => onComplete(currentTask.id)}
-                 className="p-3 neu-flat hover:neu-pressed text-zinc-400 hover:text-indigo-400 rounded-xl transition-all"
-                 title="完了ボタン"
-               >
-                 <Check className="w-6 h-6" />
-               </button>
+             )}
+          </div>
+        ) : mode === 'work' ? (
+          <motion.div 
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="neu-flat rounded-[2.5rem] p-8 text-center flex flex-col items-center justify-center space-y-4"
+          >
+            <div className="p-5 neu-inset rounded-full text-amber-400">
+               <Sparkles className="w-10 h-10 animate-button-glow" />
+            </div>
+            <h2 className="text-2xl font-black text-white italic">Mission Accomplished!</h2>
+            <p className="text-zinc-500 text-sm font-bold leading-relaxed max-w-xs">
+              すべてのタスクが完了しました。<br/>
+              素晴らしい集中力です！ゆっくり休んでください。
+            </p>
+            <button 
+              onClick={onBack}
+              className="mt-4 px-8 py-3 neu-flat hover:neu-pressed text-indigo-400 font-black text-xs uppercase tracking-widest rounded-2xl transition-all"
+            >
+              タスク入力に戻る
+            </button>
+          </motion.div>
+        ) : (
+          <div className="neu-flat rounded-[2rem] p-6 flex items-center space-x-5">
+             <div className={`p-3 neu-inset rounded-xl ${currentMode.color}`}>
+               <CurrentIcon className={`w-6 h-6 ${isActive ? 'animate-pulse-glow' : ''}`} />
              </div>
-           )}
-           {mode !== 'work' && (
+             <div className="flex-1 min-w-0">
+               <p className="flex items-center space-x-2 mb-1">
+                 <span className="text-[10px] text-zinc-500 font-black tracking-widest uppercase">
+                   Break Time
+                 </span>
+               </p>
+               <p className="text-zinc-100 font-bold truncate text-lg">
+                 {currentMode.label}
+               </p>
+             </div>
              <button
                onClick={onSkipBreak}
                className="p-3 neu-flat hover:neu-pressed text-zinc-400 hover:text-emerald-400 rounded-xl transition-all flex items-center space-x-2"
@@ -155,18 +202,12 @@ export const TimerView: React.FC<TimerViewProps> = React.memo(({
                <FastForward className="w-5 h-5" />
                <span className="text-[10px] font-black uppercase">Skip</span>
              </button>
-           )}
-        </div>
+          </div>
+        )}
 
         {/* The Big Timer Circle */}
         <div className="relative aspect-square w-full max-w-[400px] mx-auto group">
-          <svg className="w-full h-full transform -rotate-90 filter drop-shadow-[0_0_30px_rgba(0,0,0,0.7)]">
-            <defs>
-              <linearGradient id="timerGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                <stop offset="0%" stopColor="currentColor" stopOpacity="1" />
-                <stop offset="100%" stopColor="white" stopOpacity="0.5" />
-              </linearGradient>
-            </defs>
+          <svg className="w-full h-full transform -rotate-90 filter drop-shadow-[0_0_30px_rgba(0,0,0,0.5)]">
             <circle
               cx="200" cy="200" r={radius}
               stroke="currentColor" strokeWidth="8" fill="transparent"
@@ -174,7 +215,7 @@ export const TimerView: React.FC<TimerViewProps> = React.memo(({
             />
             <motion.circle
               cx="200" cy="200" r={radius}
-              stroke="url(#timerGradient)" strokeWidth="14" fill="transparent"
+              stroke="currentColor" strokeWidth="14" fill="transparent"
               strokeDasharray={circumference}
               animate={{ strokeDashoffset }}
               transition={{ duration: 0.5, ease: "linear" }}

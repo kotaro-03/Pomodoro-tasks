@@ -127,20 +127,38 @@ export default function PomodoroApp() {
   const handleStartReview = useCallback(() => {
     // Sort logic for today's tasks
     const today = new Date().toISOString().split('T')[0];
-    const todayTasks = tasks.filter(t => !t.completed && (t.addedDate === today || !t.deadline || t.deadline <= today));
     
+    // Non-today tasks (backlog that might have been forced in - though filter above handles it)
+    // Actually, let's just sort the 'tasks' that are not completed.
+    const activeTasks = tasks.filter(t => !t.completed);
+
     const priorityWeight = { '高': 3, '中': 2, '低': 1 };
-    const sorted = [...todayTasks].sort((a, b) => {
+    const sorted = [...activeTasks].sort((a, b) => {
+        // 1. Deadline sorting: Future deadlines go to bottom
+        const aIsFuture = a.deadline && a.deadline > today;
+        const bIsFuture = b.deadline && b.deadline > today;
+
+        if (aIsFuture && !bIsFuture) return 1;
+        if (!aIsFuture && bIsFuture) return -1;
+        
+        if (aIsFuture && bIsFuture) {
+           // Both are future: sort by date (nearest first)
+           return (a.deadline || "").localeCompare(b.deadline || "");
+        }
+
+        // 2. Time slot sorting (for today's tasks)
         if (a.timeSlot !== b.timeSlot) {
             const slots: TimeSlot[] = ['朝', '昼', '夜'];
             return slots.indexOf(a.timeSlot) - slots.indexOf(b.timeSlot);
         }
+
+        // 3. Priority sorting
         return priorityWeight[b.priority] - priorityWeight[a.priority];
     });
 
     setTasks(prev => {
-        const nonToday = prev.filter(t => !todayTasks.some(tr => tr.id === t.id));
-        return [...nonToday, ...sorted];
+        const completed = prev.filter(t => t.completed);
+        return [...completed, ...sorted];
     });
 
     setAppState('review');
@@ -229,6 +247,7 @@ export default function PomodoroApp() {
             activeDays={activeDays}
             workLog={workLog}
             onOpenHistory={setHistoryDate}
+            onOpenDecompose={setDecomposeTarget}
             quote={quote}
           />
         )}
