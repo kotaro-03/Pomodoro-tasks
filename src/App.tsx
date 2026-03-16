@@ -1,9 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Play, Pause, RotateCcw, Plus, Trash2, 
   Check, Brain, Coffee, BatteryCharging, 
-  ListTodo, ChevronRight, GripVertical, Sparkles, CalendarDays
+  ListTodo, ChevronRight, GripVertical, Sparkles, CalendarDays,
+  HelpCircle, Clock, Timer, BarChart3, FastForward
 } from 'lucide-react';
 
 const MOTIVATIONAL_QUOTES = [
@@ -93,6 +94,15 @@ function buildModes(bs: BreakSettings) {
   };
 }
 
+type TimeSlot = '朝' | '昼' | '夜';
+
+function getCurrentTimeSlot(): TimeSlot {
+  const h = new Date().getHours();
+  if (h >= 6 && h < 10) return '朝';
+  if (h >= 10 && h < 18) return '昼';
+  return '夜';
+}
+
 type Priority = '高' | '中' | '低';
 
 type Task = {
@@ -100,10 +110,11 @@ type Task = {
   text: string;
   completed: boolean;
   priority: Priority;
-  addedDate?: string; // YYYY-MM-DD
+  timeSlot: TimeSlot;
+  addedDate?: string;
 };
 
-type TaskHistory = Record<string, Task[]>; // date string -> task list
+type WorkLog = Record<string, number[]>; // date -> 24 element array (seconds per hour)
 
 const LS_KEYS = {
   tasks: 'pomodoro_tasks',
@@ -111,13 +122,37 @@ const LS_KEYS = {
   history: 'pomodoro_history',
   activeDays: 'harmonicRadiation_activeDays',
   breakSettings: 'pomodoro_breakSettings',
+  workLog: 'pomodoro_workLog',
 };
+
+type TaskHistory = Record<string, Task[]>;
 
 function loadFromLS<T>(key: string, fallback: T): T {
   try {
     const v = localStorage.getItem(key);
     return v ? (JSON.parse(v) as T) : fallback;
   } catch { return fallback; }
+}
+
+// Reliable notification: always plays a beep tone + browser notification
+function sendNotification(title: string, body: string) {
+  // Browser Notification
+  if ('Notification' in window && Notification.permission === 'granted') {
+    new Notification(title, { body, icon: '/favicon.ico' });
+  }
+  // Audio beep as fallback (works even if notifications are blocked)
+  try {
+    const ctx = new AudioContext();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.frequency.value = 880;
+    gain.gain.value = 0.3;
+    osc.start();
+    osc.stop(ctx.currentTime + 0.3);
+    setTimeout(() => ctx.close(), 500);
+  } catch { /* AudioContext not supported */ }
 }
 
 export default function PomodoroApp() {
@@ -164,9 +199,16 @@ export default function PomodoroApp() {
 
   const [newTask, setNewTask] = useState('');
   const [newTaskPriority, setNewTaskPriority] = useState<Priority>('中');
+  const [newTaskTimeSlot, setNewTaskTimeSlot] = useState<TimeSlot>(getCurrentTimeSlot());
 
-  // New Features State
-  const [quote, setQuote] = useState("");
+  // Work Log State (tracks seconds worked per hour per day)
+  const [workLog, setWorkLog] = useState<WorkLog>(() =>
+    loadFromLS<WorkLog>(LS_KEYS.workLog, {})
+  );
+
+  // UI State
+  const [quote, setQuote] = useState('');
+  const [showHelp, setShowHelp] = useState(false);
 
   // Decomposition Modal State
   const [decomposeTarget, setDecomposeTarget] = useState<Task | null>(null);
@@ -203,6 +245,23 @@ export default function PomodoroApp() {
   useEffect(() => {
     localStorage.setItem(LS_KEYS.breakSettings, JSON.stringify(breakSettings));
   }, [breakSettings]);
+
+  // Persist workLog
+  useEffect(() => {
+    localStorage.setItem(LS_KEYS.workLog, JSON.stringify(workLog));
+  }, [workLog]);
+
+  // Track work time: log 1 second per tick when in work mode
+  useEffect(() => {
+    if (!isActive || mode !== 'work') return;
+    const today = new Date().toISOString().split('T')[0];
+    const hour = new Date().getHours();
+    setWorkLog(prev => {
+      const dayLog = prev[today] ? [...prev[today]] : new Array(24).fill(0);
+      dayLog[hour] = (dayLog[hour] || 0) + 1;
+      return { ...prev, [today]: dayLog };
+    });
+  }, [timeLeft, isActive, mode]); // fires every second the timer ticks
 
   const archiveTodayCompleted = () => {
     const today = new Date().toISOString().split('T')[0];
@@ -251,12 +310,7 @@ export default function PomodoroApp() {
       setIsActive(true); // Automatically start the next block
       
       // Send Notification for new block
-      if ("Notification" in window && Notification.permission === "granted") {
-        new Notification("Pomodoro Update", {
-          body: `次のフェーズが始まりました: ${MODES[nextModeId].label}`,
-          icon: '/favicon.ico'
-        });
-      }
+      sendNotification('Pomodoro Update', `次のフェーズが始まりました: ${MODES[nextModeId].label}`);
     }
     
     return () => clearInterval(interval);
@@ -267,11 +321,8 @@ export default function PomodoroApp() {
     setIsActive(nextActive);
 
     // Notification on manual toggle
-    if (nextActive && "Notification" in window && Notification.permission === "granted") {
-      new Notification("Pomodoro Started", {
-        body: `${MODES[mode].label} のタイマーを開始しました。`,
-        icon: '/favicon.ico'
-      });
+    if (nextActive) {
+      sendNotification('Pomodoro Started', `${MODES[mode].label} のタイマーを開始しました。`);
     }
   };
 
@@ -287,10 +338,12 @@ export default function PomodoroApp() {
       id: Date.now().toString(), 
       text: newTask.trim(), 
       completed: false,
-      priority: newTaskPriority
+      priority: newTaskPriority,
+      timeSlot: newTaskTimeSlot
     }]);
     setNewTask('');
     setNewTaskPriority('中');
+    setNewTaskTimeSlot(getCurrentTimeSlot());
     logDate();
   };
 
@@ -324,13 +377,25 @@ export default function PomodoroApp() {
     setTimeLeft(MODES[nextModeId].time);
     setIsActive(true);
     
-    if ("Notification" in window && Notification.permission === "granted") {
-      new Notification("Task Completed 🎉", {
-        body: `お疲れ様でした！${MODES[nextModeId].label}に入ります。`,
-        icon: '/favicon.ico'
-      });
-    }
+    sendNotification('Task Completed 🎉', `お疲れ様でした！${MODES[nextModeId].label}に入ります。`);
   };
+
+  // Continue same task in next work phase (skip to break, then resume same task)
+  const continueTaskNextPhase = useCallback(() => {
+    // advance to next break, but don't mark task as completed
+    const nextIndex = (sequenceIndex + 1) % POMODORO_SEQUENCE.length;
+    const nextModeId = POMODORO_SEQUENCE[nextIndex];
+    setSequenceIndex(nextIndex);
+    setMode(nextModeId);
+    setTimeLeft(MODES[nextModeId].time);
+    setIsActive(true);
+    sendNotification('タスク継続', '休憩後に同じタスクを続けます。');
+  }, [sequenceIndex, MODES]);
+
+  // Extend current timer by 5 minutes
+  const extendTimer = useCallback(() => {
+    setTimeLeft(prev => prev + 5 * 60);
+  }, []);
 
   const deleteTask = (id: string, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
@@ -365,9 +430,10 @@ export default function PomodoroApp() {
     
     const subTasks: Task[] = decomposeNames.map((name, i) => ({
       id: Date.now().toString() + '-' + i,
-      text: name + " [25分]",
+      text: name + ' [25分]',
       completed: false,
-      priority: decomposeTarget.priority
+      priority: decomposeTarget.priority,
+      timeSlot: decomposeTarget.timeSlot
     }));
 
     setTasks(prev => {
@@ -380,22 +446,23 @@ export default function PomodoroApp() {
 
     setDecomposeTarget(null);
 
-    if ("Notification" in window && Notification.permission === "granted") {
-      new Notification("タスクを分解しました ✨", {
-        body: `「${decomposeTarget.text}」を${decomposeParts}個のタスクに分解しました。`,
-        icon: '/favicon.ico'
-      });
-    }
+    sendNotification('タスクを分解しました ✨', `「${decomposeTarget.text}」を${decomposeParts}個のタスクに分解しました。`);
   };
 
   const startSession = () => {
     if (tasks.length === 0) return;
     
-    // Sort tasks by Priority
+    // Sort tasks: current timeSlot first, then by Priority
     const priorityWeight = { '高': 3, '中': 2, '低': 1 };
+    const slotWeight: Record<TimeSlot, number> = { '朝': 0, '昼': 0, '夜': 0 };
+    slotWeight[getCurrentTimeSlot()] = 10; // boost current slot
     
     setTasks(prev => {
-      return [...prev].sort((a, b) => priorityWeight[b.priority] - priorityWeight[a.priority]);
+      return [...prev].sort((a, b) => {
+        const slotDiff = (slotWeight[b.timeSlot] || 0) - (slotWeight[a.timeSlot] || 0);
+        if (slotDiff !== 0) return slotDiff;
+        return priorityWeight[b.priority] - priorityWeight[a.priority];
+      });
     });
     
     // Start the first block (always 'work')
@@ -474,6 +541,10 @@ export default function PomodoroApp() {
                   <Brain className="w-10 h-10 text-indigo-400 animate-pulse-glow" />
                 </motion.div>
                 <h1 className="text-4xl font-extrabold tracking-tight mb-4 text-white drop-shadow-md">集中するタスクは？</h1>
+                <button onClick={() => setShowHelp(true)} className="inline-flex items-center space-x-1.5 text-xs text-zinc-500 hover:text-indigo-400 transition-colors neu-flat px-3 py-1.5 rounded-full mb-2">
+                  <HelpCircle className="w-3.5 h-3.5" />
+                  <span>ポモドーロテクニックとは？</span>
+                </button>
                 <p className="text-zinc-400 text-sm italic tracking-wide mt-2">{quote}</p>
               </div>
 
@@ -578,6 +649,25 @@ export default function PomodoroApp() {
                       }`}
                     >
                       {p}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Time Slot Selector */}
+                <div className="flex items-center space-x-3 w-full neu-inset p-2 rounded-2xl">
+                  {(['朝', '昼', '夜'] as TimeSlot[]).map((ts) => (
+                    <button
+                      key={ts}
+                      type="button"
+                      onClick={() => setNewTaskTimeSlot(ts)}
+                      className={`flex-1 py-2.5 px-3 text-sm font-bold rounded-xl transition-all duration-300 flex items-center justify-center space-x-1.5 ${
+                        newTaskTimeSlot === ts
+                          ? 'neu-pressed text-amber-400'
+                          : 'neu-flat text-zinc-500 hover:text-zinc-300'
+                      }`}
+                    >
+                      <Clock className="w-3.5 h-3.5" />
+                      <span>{ts} {ts === '朝' ? '(6-10時)' : ts === '昼' ? '(10-18時)' : '(18-6時)'}</span>
                     </button>
                   ))}
                 </div>
@@ -697,7 +787,7 @@ export default function PomodoroApp() {
               </motion.button>
               
               <p className="text-center text-zinc-500 text-xs mt-6 font-medium px-4">
-                タスクは自動的に優先度順（高 {'>'} 中 {'>'} 低）に並び替わります<br/>
+                タスクは現在の時間帯を優先し、次に優先度順（高 {'>'} 中 {'>'} 低）に並びます。<br/>
                 <span className="text-zinc-600 inline-flex items-center mt-2 italic">
                   <Sparkles className="w-3 h-3 mr-1" />
                   タスクが重いと感じた時は、リスト右側の✨アイコンから「25分単位の小タスク」に手動分解できます。
@@ -767,13 +857,31 @@ export default function PomodoroApp() {
                        </p>
                       </div>
                       {currentActiveTask && (
-                        <button
-                          onClick={() => completeCurrentActiveTask(currentActiveTask.id)}
-                          className="p-3 neu-flat hover:neu-pressed text-zinc-400 hover:text-indigo-400 rounded-xl transition-all"
-                          title="現在のタスクを完了にする"
-                        >
-                          <Check className="w-5 h-5" />
-                        </button>
+                        <div className="flex items-center space-x-2">
+                          <button
+                            onClick={extendTimer}
+                            className="p-2.5 neu-flat hover:neu-pressed text-zinc-400 hover:text-amber-400 rounded-xl transition-all"
+                            title="タイマーを5分延長"
+                          >
+                            <Timer className="w-4 h-4" />
+                            <span className="text-[9px] block font-bold mt-0.5">+5分</span>
+                          </button>
+                          <button
+                            onClick={continueTaskNextPhase}
+                            className="p-2.5 neu-flat hover:neu-pressed text-zinc-400 hover:text-teal-400 rounded-xl transition-all"
+                            title="次のフェーズでもこのタスクを続ける"
+                          >
+                            <FastForward className="w-4 h-4" />
+                            <span className="text-[9px] block font-bold mt-0.5">継続</span>
+                          </button>
+                          <button
+                            onClick={() => completeCurrentActiveTask(currentActiveTask.id)}
+                            className="p-3 neu-flat hover:neu-pressed text-zinc-400 hover:text-indigo-400 rounded-xl transition-all"
+                            title="現在のタスクを完了にする"
+                          >
+                            <Check className="w-5 h-5" />
+                          </button>
+                        </div>
                       )}
                    </>
                  ) : (
@@ -959,6 +1067,139 @@ export default function PomodoroApp() {
                 })()}
               </div>
             </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* --- WORK TIME GRAPH (visible in planning mode) --- */}
+      {appState === 'planning' && Object.keys(workLog).length > 0 && (
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="w-full max-w-5xl mx-auto relative z-10 mt-6 px-4"
+        >
+          <div className="neu-flat rounded-[2rem] p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-bold text-zinc-100 flex items-center text-lg">
+                <BarChart3 className="w-5 h-5 mr-2 text-indigo-400" />
+                日別業務時間
+              </h3>
+              <span className="text-xs text-zinc-500 font-medium">過去7日間</span>
+            </div>
+            {(() => {
+              const today = new Date();
+              const days: string[] = [];
+              for (let i = 6; i >= 0; i--) {
+                const d = new Date(today);
+                d.setDate(d.getDate() - i);
+                days.push(d.toISOString().split('T')[0]);
+              }
+              const maxSecs = Math.max(...days.map(d => (workLog[d] || []).reduce((a, b) => a + b, 0)), 1);
+              return (
+                <div className="space-y-3">
+                  {days.map(day => {
+                    const dayLog = workLog[day] || new Array(24).fill(0);
+                    const totalSecs = dayLog.reduce((a: number, b: number) => a + b, 0);
+                    const totalMins = Math.round(totalSecs / 60);
+                    const hrs = Math.floor(totalMins / 60);
+                    const mins = totalMins % 60;
+                    const shortDay = day.slice(5);
+                    return (
+                      <div key={day} className="flex items-center space-x-3">
+                        <span className="text-xs text-zinc-500 w-14 text-right font-mono">{shortDay}</span>
+                        <div className="flex-1 h-6 rounded-full bg-zinc-800/50 overflow-hidden relative">
+                          <div className="h-full rounded-full bg-gradient-to-r from-indigo-500 to-emerald-400 transition-all duration-500" style={{ width: `${(totalSecs / maxSecs) * 100}%` }} />
+                        </div>
+                        <span className="text-xs text-zinc-400 w-16 font-bold">{hrs > 0 ? `${hrs}時間${mins}分` : `${mins}分`}</span>
+                      </div>
+                    );
+                  })}
+                  <p className="text-center text-sm font-bold mt-4 text-zinc-300">
+                    {(() => {
+                      const todayTotal = Math.round(((workLog[days[6]] || []).reduce((a: number, b: number) => a + b, 0)) / 60);
+                      if (todayTotal === 0) return '💪 さあ、今日も集中を始めよう！';
+                      if (todayTotal < 60) return '🔥 素晴らしいスタート！その調子で続けよう！';
+                      if (todayTotal < 120) return '⚡ 1時間以上集中！素晴らしい集中力だ！';
+                      if (todayTotal < 240) return '🚀 大きな成果を上げています！その勢い！';
+                      return '🌟 今日は圧倒的な集中力だ！最高の一日！';
+                    })()}
+                  </p>
+                </div>
+              );
+            })()}
+          </div>
+        </motion.div>
+      )}
+
+      {/* --- POMODORO HELP MODAL --- */}
+      <AnimatePresence>
+        {showHelp && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4"
+            onClick={() => setShowHelp(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              onClick={(e) => e.stopPropagation()}
+              className="neu-flat rounded-[2rem] p-8 max-w-lg w-full max-h-[80vh] overflow-y-auto custom-scrollbar"
+            >
+              <div className="flex items-center space-x-3 mb-6">
+                <div className="p-3 neu-inset rounded-xl text-indigo-400">
+                  <HelpCircle className="w-6 h-6" />
+                </div>
+                <h2 className="text-2xl font-bold">ポモドーロテクニックとは？</h2>
+              </div>
+              
+              <div className="space-y-4 text-zinc-300 text-sm leading-relaxed">
+                <p>
+                  <strong className="text-indigo-400">ポモドーロテクニック</strong>は、1980年代にフランチェスコ・シリロが考案した時間管理法です。
+                  トマト型のキッチンタイマー🍅（ポモドーロ）が名前の由来です。
+                </p>
+                
+                <div className="neu-inset rounded-xl p-4 space-y-2">
+                  <p className="font-bold text-zinc-100 mb-3">📋 本アプリのサイクル:</p>
+                  <div className="space-y-1.5">
+                    {[
+                      { icon: '🧠', text: '25分 集中（作業）', color: 'text-indigo-400' },
+                      { icon: '☕', text: `${breakSettings.shortBreak}分 小休止`, color: 'text-emerald-400' },
+                      { icon: '🧠', text: '25分 集中（作業）', color: 'text-indigo-400' },
+                      { icon: '☕', text: `${breakSettings.shortBreak}分 小休止`, color: 'text-emerald-400' },
+                      { icon: '🧠', text: '25分 集中（作業）', color: 'text-indigo-400' },
+                      { icon: '🍵', text: `${breakSettings.midBreak}分 中休止`, color: 'text-teal-400' },
+                      { icon: '🔁', text: 'もう1サイクル繰り返し…', color: 'text-zinc-500' },
+                      { icon: '🛋️', text: `${breakSettings.longBreak}分 長めの休憩`, color: 'text-blue-400' },
+                    ].map((item, i) => (
+                      <p key={i} className={`flex items-center space-x-2 ${item.color}`}>
+                        <span>{item.icon}</span>
+                        <span className="font-medium">{item.text}</span>
+                      </p>
+                    ))}
+                  </div>
+                </div>
+
+                <p>
+                  <strong className="text-amber-400">なぜ効果的なのか？</strong>
+                </p>
+                <ul className="list-disc list-inside space-y-1 text-zinc-400">
+                  <li>短い集中と休憩の繰り返しで<strong className="text-zinc-200">持続可能な集中力</strong>を維持</li>
+                  <li>明確な時間制限が<strong className="text-zinc-200">先延ばしを防止</strong></li>
+                  <li>小さなゴールの達成感が<strong className="text-zinc-200">モチベーション維持</strong>に寄与</li>
+                  <li>定期的な休憩が<strong className="text-zinc-200">脳のリフレッシュ</strong>を促進</li>
+                </ul>
+              </div>
+              
+              <button
+                onClick={() => setShowHelp(false)}
+                className="w-full mt-6 py-3 neu-flat hover:neu-pressed text-indigo-400 rounded-xl font-bold transition-all"
+              >
+                閉じる
+              </button>
+            </motion.div>
           </motion.div>
         )}
       </AnimatePresence>
