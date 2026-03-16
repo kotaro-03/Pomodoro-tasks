@@ -25,11 +25,12 @@ interface TimerViewProps {
   sequenceIndex: number;
   MODES: Modes;
   isContinuing: boolean;
+  onSkipBreak: () => void;
 }
 
 export const TimerView: React.FC<TimerViewProps> = React.memo(({ 
   tasks, mode, timeLeft, isActive, onToggle, onReset, 
-  onBack, onComplete, onExtend, onSetContinue, sequenceIndex, MODES, isContinuing
+  onBack, onComplete, onExtend, onSetContinue, onSkipBreak, sequenceIndex, MODES, isContinuing
 }) => {
   const currentMode = MODES[mode];
   const CurrentIcon = currentMode.icon;
@@ -145,24 +146,40 @@ export const TimerView: React.FC<TimerViewProps> = React.memo(({
                </button>
              </div>
            )}
+           {mode !== 'work' && (
+             <button
+               onClick={onSkipBreak}
+               className="p-3 neu-flat hover:neu-pressed text-zinc-400 hover:text-emerald-400 rounded-xl transition-all flex items-center space-x-2"
+               title="休憩を終了して次へ"
+             >
+               <FastForward className="w-5 h-5" />
+               <span className="text-[10px] font-black uppercase">Skip</span>
+             </button>
+           )}
         </div>
 
         {/* The Big Timer Circle */}
         <div className="relative aspect-square w-full max-w-[400px] mx-auto group">
-          <svg className="w-full h-full transform -rotate-90 filter drop-shadow-[0_0_20px_rgba(0,0,0,0.5)]">
+          <svg className="w-full h-full transform -rotate-90 filter drop-shadow-[0_0_30px_rgba(0,0,0,0.7)]">
+            <defs>
+              <linearGradient id="timerGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stopColor="currentColor" stopOpacity="1" />
+                <stop offset="100%" stopColor="white" stopOpacity="0.5" />
+              </linearGradient>
+            </defs>
             <circle
               cx="200" cy="200" r={radius}
               stroke="currentColor" strokeWidth="8" fill="transparent"
-              className="text-zinc-800/50"
+              className="text-zinc-800/40"
             />
             <motion.circle
               cx="200" cy="200" r={radius}
-              stroke="currentColor" strokeWidth="12" fill="transparent"
+              stroke="url(#timerGradient)" strokeWidth="14" fill="transparent"
               strokeDasharray={circumference}
               animate={{ strokeDashoffset }}
               transition={{ duration: 0.5, ease: "linear" }}
               strokeLinecap="round"
-              className={`${currentMode.color} drop-shadow-[0_0_12px_currentColor]`}
+              className={`${currentMode.color} drop-shadow-[0_0_20px_currentColor]`}
             />
           </svg>
           

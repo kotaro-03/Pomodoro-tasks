@@ -64,11 +64,13 @@ export const InputView: React.FC<InputViewProps> = React.memo(({
 
   // ─── Filtering ───
   // Today's tasks: Added today OR incomplete with no deadline OR past deadline
+  // Today's tasks: strictly non-completed tasks for today, or past/current deadline
   const todayTasks = useMemo(() => tasks.filter(t => {
     if (t.completed) return false;
-    if (t.addedDate === today) return true;
-    if (!t.deadline) return true;
-    return t.deadline <= today;
+    // Hide tasks with a FUTURE deadline, even if added today
+    if (t.deadline && t.deadline > today) return false;
+    // Show if added today OR if it has no deadline (backlogs always have deadlines in this flow)
+    return t.addedDate === today || !t.deadline || t.deadline <= today;
   }), [tasks, today]);
 
   const backlogTasks = useMemo(() => tasks.filter(t => 
@@ -85,7 +87,11 @@ export const InputView: React.FC<InputViewProps> = React.memo(({
   }, [backlogTasks]);
 
   const approveSuggestion = (task: Task) => {
-    setTasks(prev => prev.map(t => t.id === task.id ? { ...t, addedDate: today } : t));
+    // To ensure it's at the end, we mark it as added today and put it at the end of the tasks array
+    setTasks(prev => {
+      const filtered = prev.filter(t => t.id !== task.id);
+      return [...filtered, { ...task, addedDate: today }];
+    });
   };
 
   return (
@@ -113,33 +119,7 @@ export const InputView: React.FC<InputViewProps> = React.memo(({
           <p className="text-zinc-400 text-sm italic tracking-wide mt-2 min-h-[1.5em]">{quote}</p>
         </div>
 
-        {/* Suggestion Card */}
-        {suggestion && (
-          <motion.div 
-            initial={{ x: -20, opacity: 0 }}
-            animate={{ x: 0, opacity: 1 }}
-            className="neu-flat rounded-2xl p-4 border border-indigo-500/20 bg-indigo-500/5"
-          >
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-[10px] font-bold text-indigo-400 tracking-widest uppercase">Suggestion</span>
-              <span className="text-[10px] text-zinc-500 flex items-center">
-                <Clock className="w-3 h-3 mr-1" />
-                締切が近いです
-              </span>
-            </div>
-            <p className="text-sm font-bold text-white mb-3 leading-relaxed">
-              「{suggestion.text}」を今日のリストに追加しますか？
-            </p>
-            <button 
-              onClick={() => approveSuggestion(suggestion)}
-              className="w-full py-2 bg-indigo-500 hover:bg-indigo-600 text-white text-xs font-bold rounded-xl shadow-lg transition-all active:scale-95"
-            >
-              今日のタスクに追加
-            </button>
-          </motion.div>
-        )}
-
-        {/* Calendar (Mini) */}
+        {/* Calendar (Mini) moves here */}
         <div className="neu-flat rounded-[2rem] p-6 relative overflow-hidden">
           <div className="flex items-center space-x-3 mb-4">
             <CalendarDays className="w-5 h-5 text-indigo-400" />
@@ -295,6 +275,31 @@ export const InputView: React.FC<InputViewProps> = React.memo(({
               </motion.div>
             ))}
           </AnimatePresence>
+
+          {suggestion && !showBacklog && (
+            <motion.div 
+              initial={{ y: 10, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              className="neu-flat rounded-2xl p-4 border border-indigo-500/20 bg-indigo-500/5 mt-6"
+            >
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-[10px] font-bold text-indigo-400 tracking-widest uppercase">Suggestion</span>
+                <span className="text-[10px] text-zinc-500 flex items-center">
+                  <Clock className="w-3 h-3 mr-1" />
+                  締切が近いです
+                </span>
+              </div>
+              <p className="text-sm font-bold text-white mb-3 leading-relaxed">
+                「{suggestion.text}」を今日のリストに追加しますか？
+              </p>
+              <button 
+                onClick={() => approveSuggestion(suggestion)}
+                className="w-full py-2 bg-indigo-500 hover:bg-indigo-600 text-white text-xs font-bold rounded-xl shadow-lg transition-all active:scale-95"
+              >
+                今日のタスクに追加
+              </button>
+            </motion.div>
+          )}
 
           {todayTasks.length > 0 && !showBacklog && (
             <motion.button

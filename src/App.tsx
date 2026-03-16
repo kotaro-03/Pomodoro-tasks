@@ -190,6 +190,16 @@ export default function PomodoroApp() {
     sendNotification('Task Completed 🎉', 'お疲れ様でした！休憩に入ります。');
   }, [sequenceIndex, MODES, tasks]);
 
+  const handleSkipBreak = useCallback(() => {
+    const nextIndex = (sequenceIndex + 1) % POMODORO_SEQUENCE.length;
+    const nextModeId = POMODORO_SEQUENCE[nextIndex];
+    
+    setSequenceIndex(nextIndex);
+    setMode(nextModeId);
+    setTimeLeft(MODES[nextModeId].time);
+    setIsActive(true);
+  }, [sequenceIndex, MODES]);
+
   // View logic
   const today = new Date().toISOString().split('T')[0];
   const todayTasksForReview = useMemo(() => 
@@ -199,10 +209,11 @@ export default function PomodoroApp() {
   return (
     <div className="min-h-screen bg-[#15171c] text-zinc-100 font-sans selection:bg-indigo-500/30 overflow-x-hidden transition-colors duration-1000">
       
-      {/* Background Glows */}
-      <div className="fixed inset-0 z-0 overflow-hidden pointer-events-none opacity-40">
-        <div className={`organic-curve absolute -top-[10%] -left-[10%] w-[50vw] h-[50vw] transition-colors duration-1000 ${appState === 'running' && mode !== 'work' ? 'bg-emerald-500/20' : 'bg-indigo-500/20'}`} />
-        <div className="organic-curve absolute top-[20%] -right-[10%] w-[60vw] h-[60vw] bg-violet-500/10" style={{ animationDelay: '-4s' }} />
+      {/* Background Glows Enhancement */}
+      <div className="fixed inset-0 z-0 overflow-hidden pointer-events-none">
+        <div className={`organic-curve absolute -top-[20%] -left-[10%] w-[70vw] h-[70vw] transition-colors duration-[2000ms] blur-[120px] opacity-50 ${appState === 'running' && mode !== 'work' ? 'bg-emerald-500/30' : 'bg-indigo-600/30'}`} />
+        <div className="organic-curve absolute top-[10%] -right-[20%] w-[80vw] h-[80vw] bg-violet-600/20 blur-[150px] opacity-40" style={{ animationDelay: '-4s', animationDuration: '25s' }} />
+        <div className="organic-curve absolute -bottom-[30%] left-[10%] w-[60vw] h-[60vw] bg-blue-600/10 blur-[100px] opacity-30" style={{ animationDelay: '-8s', animationDuration: '30s' }} />
       </div>
 
       <AnimatePresence mode="wait">
@@ -254,6 +265,7 @@ export default function PomodoroApp() {
             onComplete={handleCompleteTask}
             onExtend={() => setTimeLeft(t => t + 300)}
             onSetContinue={() => setIsContinuing(!isContinuing)}
+            onSkipBreak={handleSkipBreak}
             sequenceIndex={sequenceIndex}
             MODES={MODES}
             isContinuing={isContinuing}
