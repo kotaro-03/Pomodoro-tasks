@@ -24,46 +24,74 @@ const MOTIVATIONAL_QUOTES = [
   "「人生とは、今日一日のことである。」- カーネギー"
 ];
 
-// Define the standard Pomodoro sequence
-// 25m Focus -> 5m Break -> 25m Focus -> 5m Break -> 25m Focus -> 15m Long Break => LOOP
+// Define the extended Pomodoro sequence (2 cycles)
+// Cycle 1: work, shortBreak, work, shortBreak, work, midBreak
+// Cycle 2: work, shortBreak, work, shortBreak, work, longBreak
 const POMODORO_SEQUENCE = [
+  'work', 'shortBreak', 'work', 'shortBreak', 'work', 'midBreak',
   'work', 'shortBreak', 'work', 'shortBreak', 'work', 'longBreak'
 ] as const;
 
-type ModeId = 'work' | 'shortBreak' | 'longBreak';
+type ModeId = 'work' | 'shortBreak' | 'midBreak' | 'longBreak';
 
-const MODES = {
-  work: { 
-    id: 'work',
-    label: '集中', 
-    time: 25 * 60, 
-    icon: Brain, 
-    color: 'text-indigo-400',
-    bg: 'bg-indigo-500/10', 
-    border: 'border-indigo-500/20',
-    activeBtn: 'bg-indigo-500 hover:bg-indigo-600'
-  },
-  shortBreak: { 
-    id: 'shortBreak',
-    label: '短い休憩', 
-    time: 5 * 60, 
-    icon: Coffee, 
-    color: 'text-emerald-400',
-    bg: 'bg-emerald-500/10', 
-    border: 'border-emerald-500/20',
-    activeBtn: 'bg-emerald-500 hover:bg-emerald-600'
-  },
-  longBreak: { 
-    id: 'longBreak',
-    label: '長い休憩', 
-    time: 15 * 60, 
-    icon: BatteryCharging, 
-    color: 'text-blue-400',
-    bg: 'bg-blue-500/10', 
-    border: 'border-blue-500/20',
-    activeBtn: 'bg-blue-500 hover:bg-blue-600'
-  }
+const BREAK_OPTIONS = [5, 10, 15, 20, 25, 30]; // minutes
+
+type BreakSettings = {
+  shortBreak: number; // minutes
+  midBreak: number;
+  longBreak: number;
 };
+
+const DEFAULT_BREAK_SETTINGS: BreakSettings = {
+  shortBreak: 5,
+  midBreak: 15,
+  longBreak: 25,
+};
+
+function buildModes(bs: BreakSettings) {
+  return {
+    work: { 
+      id: 'work' as const,
+      label: '集中', 
+      time: 25 * 60, 
+      icon: Brain, 
+      color: 'text-indigo-400',
+      bg: 'bg-indigo-500/10', 
+      border: 'border-indigo-500/20',
+      activeBtn: 'bg-indigo-500 hover:bg-indigo-600'
+    },
+    shortBreak: { 
+      id: 'shortBreak' as const,
+      label: '小休止', 
+      time: bs.shortBreak * 60, 
+      icon: Coffee, 
+      color: 'text-emerald-400',
+      bg: 'bg-emerald-500/10', 
+      border: 'border-emerald-500/20',
+      activeBtn: 'bg-emerald-500 hover:bg-emerald-600'
+    },
+    midBreak: {
+      id: 'midBreak' as const,
+      label: '中休止',
+      time: bs.midBreak * 60,
+      icon: Coffee,
+      color: 'text-teal-400',
+      bg: 'bg-teal-500/10',
+      border: 'border-teal-500/20',
+      activeBtn: 'bg-teal-500 hover:bg-teal-600'
+    },
+    longBreak: { 
+      id: 'longBreak' as const,
+      label: '長めの休憩', 
+      time: bs.longBreak * 60, 
+      icon: BatteryCharging, 
+      color: 'text-blue-400',
+      bg: 'bg-blue-500/10', 
+      border: 'border-blue-500/20',
+      activeBtn: 'bg-blue-500 hover:bg-blue-600'
+    }
+  };
+}
 
 type Priority = '高' | '中' | '低';
 
@@ -82,6 +110,7 @@ const LS_KEYS = {
   lastDate: 'pomodoro_lastDate',
   history: 'pomodoro_history',
   activeDays: 'harmonicRadiation_activeDays',
+  breakSettings: 'pomodoro_breakSettings',
 };
 
 function loadFromLS<T>(key: string, fallback: T): T {
@@ -95,6 +124,12 @@ export default function PomodoroApp() {
   // Application State: 'planning' (entering tasks) | 'running' (timer active)
   const [appState, setAppState] = useState<'planning' | 'running'>('planning');
   
+  // Break Settings State
+  const [breakSettings, setBreakSettings] = useState<BreakSettings>(() =>
+    loadFromLS<BreakSettings>(LS_KEYS.breakSettings, DEFAULT_BREAK_SETTINGS)
+  );
+  const MODES = buildModes(breakSettings);
+
   // Timer State
   const [timeLeft, setTimeLeft] = useState(MODES['work'].time);
   const [isActive, setIsActive] = useState(false);
@@ -163,6 +198,11 @@ export default function PomodoroApp() {
   useEffect(() => {
     localStorage.setItem(LS_KEYS.history, JSON.stringify(taskHistory));
   }, [taskHistory]);
+
+  // Persist breakSettings
+  useEffect(() => {
+    localStorage.setItem(LS_KEYS.breakSettings, JSON.stringify(breakSettings));
+  }, [breakSettings]);
 
   const archiveTodayCompleted = () => {
     const today = new Date().toISOString().split('T')[0];
@@ -615,6 +655,36 @@ export default function PomodoroApp() {
                 </AnimatePresence>
               </div>
 
+              {/* --- BREAK SETTINGS --- */}
+              <div className="neu-inset rounded-2xl p-5 mb-6">
+                <h4 className="text-sm font-bold text-zinc-400 mb-4 flex items-center">
+                  <Coffee className="w-4 h-4 mr-2 text-emerald-400" />
+                  休憩時間の設定
+                </h4>
+                <div className="grid grid-cols-3 gap-3">
+                  {([
+                    { key: 'shortBreak' as const, label: '小休止', color: 'text-emerald-400' },
+                    { key: 'midBreak' as const, label: '中休止', color: 'text-teal-400' },
+                    { key: 'longBreak' as const, label: '長めの休憩', color: 'text-blue-400' },
+                  ]).map(({ key, label, color }) => (
+                    <div key={key} className="flex flex-col items-center space-y-2">
+                      <span className={`text-xs font-bold ${color}`}>{label}</span>
+                      <div className="flex items-center space-x-2">
+                        <select
+                          value={breakSettings[key]}
+                          onChange={(e) => setBreakSettings(prev => ({ ...prev, [key]: Number(e.target.value) }))}
+                          className="neu-inset rounded-xl px-3 py-2 bg-transparent text-white text-sm font-bold outline-none cursor-pointer appearance-none text-center w-20"
+                        >
+                          {BREAK_OPTIONS.map(m => (
+                            <option key={m} value={m} className="bg-zinc-800 text-white">{m}分</option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
               <motion.button
                 whileHover={{ scale: 1.02 }}
                 whileTap={{ scale: 0.98 }}
@@ -716,7 +786,7 @@ export default function PomodoroApp() {
                          休憩時間
                        </p>
                        <p className="text-zinc-100 font-bold truncate text-lg">
-                         {mode === 'shortBreak' ? "5分間の短い休憩をとりましょう。" : "15分間の長い休憩をとりましょう。"}
+                         {`${Math.floor(currentMode.time / 60)}分間の${currentMode.label}をとりましょう。`}
                        </p>
                      </div>
                      <button
@@ -864,6 +934,8 @@ export default function PomodoroApp() {
                       );
                       taskIdx++;
                     } else {
+                      const breakMode = MODES[pMode];
+                      const breakMins = Math.floor(breakMode.time / 60);
                       const isShort = pMode === 'shortBreak';
                       upcomingFlow.push(
                         <div key={`flow-break-${currentSeqIdx}-${taskIdx}`} className={`flex items-center p-3 rounded-2xl mx-4 transition-all ${isCurrent ? 'neu-inset border border-emerald-500/30' : 'opacity-60'}`}>
@@ -872,7 +944,7 @@ export default function PomodoroApp() {
                           </div>
                           <div className="flex-1 min-w-0">
                             <p className={`text-xs font-bold ${isCurrent ? 'text-emerald-400' : 'text-zinc-500'}`}>
-                              {isShort ? '5分 小休止' : '15分 長めの休憩'}
+                              {`${breakMins}分 ${breakMode.label}`}
                             </p>
                           </div>
                           {isCurrent && <div className="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.8)] animate-pulse" />}
